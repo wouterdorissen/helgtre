@@ -6,16 +6,244 @@
 <title>Tournée Générale 2026 — Helgtre</title>
 <link rel="stylesheet" href="punk.css">
 <link rel="stylesheet" href="site.css">
+<style>
+/* ---- POPUP OVERLAY ---- */
+#tg-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s ease;
+}
+#tg-modal.open { opacity: 1; pointer-events: all; }
+
+#tg-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,5,20,.82);
+  backdrop-filter: blur(6px);
+}
+
+#tg-box {
+  position: relative; z-index: 2;
+  background: var(--paper);
+  color: var(--ink);
+  border: 4px solid var(--ink);
+  box-shadow: 10px 10px 0 var(--neon);
+  max-width: 680px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  transform: rotate(-1deg) translateY(30px);
+  transition: transform .3s cubic-bezier(.22,1,.36,1);
+}
+#tg-modal.open #tg-box {
+  transform: rotate(-0.5deg) translateY(0);
+}
+
+/* tape strips on top of popup */
+#tg-box::before, #tg-box::after {
+  content: ''; position: absolute;
+  width: 110px; height: 28px;
+  background: rgba(43,85,224,.45);
+  background-image: repeating-linear-gradient(90deg,rgba(255,255,255,.1) 0 4px,rgba(0,0,0,.04) 4px 8px);
+  z-index: 5;
+}
+#tg-box::before { top: -14px; left: 60px; transform: rotate(-7deg); }
+#tg-box::after  { top: -14px; right: 80px; transform: rotate(5deg); }
+
+.tg-head {
+  background: var(--ink);
+  color: #fff;
+  padding: 28px 32px 22px;
+  position: relative;
+  border-bottom: 3px solid var(--neon);
+}
+.tg-head .eyebrow { color: var(--neon-hot); margin-bottom: 6px; font-size: 13px; }
+.tg-head h2 {
+  font-family: 'Anton', Impact, sans-serif;
+  text-transform: uppercase;
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: .95;
+  letter-spacing: .02em;
+}
+.tg-head h2 em {
+  font-style: normal;
+  color: var(--neon-hot);
+  text-shadow: 0 0 16px rgba(91,135,255,.6);
+}
+
+#tg-close {
+  position: absolute; top: 14px; right: 18px;
+  background: none; border: 2px solid rgba(255,255,255,.3);
+  color: #fff; font-family: 'Anton', Impact, sans-serif;
+  font-size: 18px; padding: 4px 10px; cursor: pointer;
+  text-transform: uppercase; letter-spacing: .05em;
+  transition: border-color .12s, color .12s;
+}
+#tg-close:hover { border-color: var(--neon-hot); color: var(--neon-hot); }
+
+.tg-body { padding: 28px 32px 32px; }
+
+/* punk form fields */
+.tg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.tg-grid.full { grid-template-columns: 1fr; }
+@media(max-width:560px){ .tg-grid { grid-template-columns: 1fr; } }
+
+.tg-field { display: flex; flex-direction: column; gap: 6px; }
+.tg-field label {
+  font-family: 'Saira Stencil One', sans-serif;
+  text-transform: uppercase; font-size: 11px;
+  letter-spacing: .12em; color: var(--ink);
+}
+.tg-field label span { color: var(--neon); margin-left: 2px; }
+.tg-field input,
+.tg-field select,
+.tg-field textarea {
+  font-family: 'Special Elite', monospace;
+  font-size: 15px; color: var(--ink);
+  background: #fff; border: 2.5px solid var(--ink);
+  padding: 11px 13px; outline: none; resize: vertical;
+  transition: box-shadow .12s, border-color .12s;
+}
+.tg-field input:focus,
+.tg-field select:focus,
+.tg-field textarea:focus {
+  box-shadow: 4px 4px 0 var(--neon);
+  border-color: var(--neon);
+}
+.tg-field select { cursor: pointer; }
+
+.tg-divider {
+  border: none; border-top: 2px solid var(--ink);
+  margin: 24px 0 20px;
+  position: relative;
+}
+.tg-divider-label {
+  font-family: 'Saira Stencil One', sans-serif;
+  text-transform: uppercase; font-size: 11px;
+  letter-spacing: .14em; color: #666;
+  background: var(--paper);
+  padding: 0 10px;
+  position: absolute; top: -9px; left: 20px;
+}
+
+.tg-submit {
+  margin-top: 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+}
+.tg-note { font-size: 12px; color: #666; font-family: 'Special Elite', monospace; max-width: 28ch; }
+
+.tg-sent {
+  text-align: center; padding: 40px 32px;
+  background: var(--neon);
+  color: var(--ink);
+  border-top: 3px solid var(--ink);
+}
+.tg-sent h3 {
+  font-family: 'Anton', Impact, sans-serif;
+  text-transform: uppercase; font-size: 32px;
+  margin-bottom: 10px;
+}
+.tg-sent p { font-size: 15px; line-height: 1.6; max-width: 36ch; margin: 0 auto; }
+</style>
 </head>
 <body>
 
+<!-- POPUP -->
+<div id="tg-modal" role="dialog" aria-modal="true" aria-labelledby="tg-title">
+  <div id="tg-backdrop"></div>
+  <div id="tg-box">
+    <div class="tg-head grain">
+      <div class="eyebrow"><span class="d"></span>Inschrijvingen open · 2026</div>
+      <h2 id="tg-title">Team <em>inschrijven</em><br>Tournée Générale</h2>
+      <button id="tg-close" aria-label="Sluiten">✕ Sluiten</button>
+    </div>
+
+    <div class="tg-body" id="tg-form-wrap">
+      <form id="tg-form" novalidate>
+        <!-- Team -->
+        <div class="tg-grid">
+          <div class="tg-field">
+            <label>Teamnaam <span>*</span></label>
+            <input type="text" name="teamnaam" required placeholder="bv. The Flying Dutchmen">
+          </div>
+          <div class="tg-field">
+            <label>Aantal spelers <span>*</span></label>
+            <select name="spelers" required>
+              <option value="">— selecteer —</option>
+              <option>7</option><option>8</option><option>9</option>
+              <option>10</option><option>11</option><option>12+</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="tg-grid" style="margin-top:18px;">
+          <div class="tg-field">
+            <label>Land / regio <span>*</span></label>
+            <input type="text" name="land" required placeholder="bv. Nederland, België, ...">
+          </div>
+          <div class="tg-field">
+            <label>Divisie ervaring</label>
+            <select name="niveau">
+              <option value="">— selecteer —</option>
+              <option>Beginner</option>
+              <option>Recreatief</option>
+              <option>Competitief</option>
+              <option>Mix</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="tg-divider"><span class="tg-divider-label">Contactpersoon</span>
+
+        <div class="tg-grid">
+          <div class="tg-field">
+            <label>Voornaam <span>*</span></label>
+            <input type="text" name="voornaam" required placeholder="Voornaam">
+          </div>
+          <div class="tg-field">
+            <label>Naam <span>*</span></label>
+            <input type="text" name="naam" required placeholder="Achternaam">
+          </div>
+        </div>
+
+        <div class="tg-grid" style="margin-top:18px;">
+          <div class="tg-field">
+            <label>E-mail <span>*</span></label>
+            <input type="email" name="email" required placeholder="jouw@email.com">
+          </div>
+          <div class="tg-field">
+            <label>Telefoonnummer</label>
+            <input type="tel" name="tel" placeholder="+32 ...">
+          </div>
+        </div>
+
+        <div class="tg-grid full" style="margin-top:18px;">
+          <div class="tg-field">
+            <label>Opmerkingen</label>
+            <textarea name="opmerkingen" rows="3" placeholder="Speciale vragen, dieetwensen, of gewoon: we zijn er klaar voor!"></textarea>
+          </div>
+        </div>
+
+        <div class="tg-submit">
+          <p class="tg-note">Plaatsen zijn beperkt — op volgorde van inschrijving.</p>
+          <button type="submit" class="pbtn pbtn--neon" style="font-size:1.05rem;">
+            Team inschrijven →
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
 <header class="site-nav grain">
   <div class="wrap row">
-    <a class="brand" href="index.html"><span class="dot"></span><img src="https://helgtre.com/wp-content/uploads/2026/06/logo-helgtre-white.png" alt="helgtre"></a>
+    <a class="brand" href="index.html"><img src="https://helgtre.com/wp-content/uploads/2026/06/logo-helgtre-white.png" alt="helgtre"></a>
     <nav class="nav-links">
       <a href="index.html">Home</a>
       <a href="tournee-generale.html" class="on">Tournée Générale</a>
       <a href="galerij.html">Galerij</a>
+      <a href="game.html">🥏 Game</a>
       <a href="contact.html">Contact</a>
       <a href="contact.html" class="nav-cta">Kom meedoen →</a>
     </nav>
@@ -33,15 +261,17 @@
     <div class="word ransom" style="margin-top:10px;">
       <span class="rn rn--neon r2">G</span><span class="rn rn--paper r3">É</span><span class="rn rn--violet r1">N</span><span class="rn rn--neon r2">É</span><span class="rn rn--paper r1">R</span><span class="rn rn--violet r3">A</span><span class="rn rn--neon r2">L</span><span class="rn rn--paper r1">E</span>
     </div>
-    <p class="sub">Onze jaarlijkse open-divisie tournament strijkt opnieuw neer in Houthalen-Helchteren. Teams uit België en Nederland zijn welkom. Inschrijvingen voor de editie van 2026 zijn open.</p>
-    <div style="margin-top:28px;"><a class="pbtn pbtn--neon" href="#inschrijven">Inschrijven →</a></div>
+    <p class="sub">Onze jaarlijkse open-divisie tournament in Houthalen-Helchteren. Teams van over heel de wereld zijn welkom. Inschrijvingen voor 2026 zijn open.</p>
+    <div style="margin-top:28px;">
+      <button class="pbtn pbtn--neon open-modal" style="font-size:1.1rem;">Inschrijven →</button>
+    </div>
   </div>
 </section>
 
 <div class="mqbar invert marquee fast">
   <div class="marquee__t">
-    <span>★ Open divisie ★ Teams uit BE &amp; NL ★ Hele dag frisbee ★ Spirit of the game ★ Houthalen-Helchteren ★</span>
-    <span>★ Open divisie ★ Teams uit BE &amp; NL ★ Hele dag frisbee ★ Spirit of the game ★ Houthalen-Helchteren ★</span>
+    <span>★ Open divisie ★ Teams van over de wereld ★ Hele dag frisbee ★ Spirit of the game ★ Houthalen-Helchteren ★</span>
+    <span>★ Open divisie ★ Teams van over de wereld ★ Hele dag frisbee ★ Spirit of the game ★ Houthalen-Helchteren ★</span>
   </div>
 </div>
 
@@ -56,16 +286,18 @@
         <div class="ir"><span class="k">Datum</span><span class="v">Zomer '26 · TBA</span></div>
         <div class="ir"><span class="k">Locatie</span><span class="v">Houthalen-Helchteren</span></div>
         <div class="ir"><span class="k">Divisie</span><span class="v">Open</span></div>
-        <div class="ir"><span class="k">Teams</span><span class="v">BE + NL</span></div>
+        <div class="ir"><span class="k">Teams</span><span class="v">Wereldwijd welkom</span></div>
         <div class="ir"><span class="k">Format</span><span class="v">Round robin → play-offs</span></div>
+      </div>
+      <div style="margin-top:30px;">
+        <button class="pbtn pbtn--ink open-modal">Schrijf je team in →</button>
       </div>
     </div>
     <div style="position:relative;">
       <div class="tape" style="top:-13px;left:50px;transform:rotate(-7deg);z-index:9;"></div>
       <div class="tape violet" style="bottom:-12px;right:60px;transform:rotate(6deg);z-index:9;"></div>
-      <div class="photo bw" style="height:440px;border:7px solid var(--ink);box-shadow:8px 9px 0 var(--neon);transform:rotate(2.5deg);">
+      <div class="photo clean" style="height:440px;border:7px solid var(--ink);box-shadow:8px 9px 0 var(--neon);transform:rotate(2.5deg);">
         <img src="https://helgtre.com/wp-content/uploads/2026/06/480303976_2542568375945775_94639831422311478_n.jpg" alt="Tournée Générale">
-        <div class="ht"></div>
       </div>
       <div class="stamp ink jitter" style="position:absolute;top:-26px;right:-12px;width:108px;height:108px;background:var(--neon);border-color:var(--ink);color:var(--ink);font-size:16px;z-index:10;">Editie<br>2026</div>
     </div>
@@ -106,13 +338,13 @@
   </div>
 </section>
 
-<!-- INSCHRIJVEN CTA -->
-<section id="inschrijven" class="sec paper paper-bg grain heavy" style="text-align:center;padding:78px 0;">
+<!-- CTA -->
+<section class="sec paper paper-bg grain heavy" style="text-align:center;padding:78px 0;">
   <div class="wrap">
     <div class="eyebrow" style="justify-content:center;"><span class="d"></span>Inschrijvingen open</div>
     <div class="shead" style="display:flex;justify-content:center;"><h2 style="text-align:center;"><em>Schrijf je team in</em> voor 2026.</h2></div>
-    <p style="max-width:42ch;margin:22px auto 28px;font-size:18px;line-height:1.55;">Stuur ons je teamnaam en aantal spelers via de contactpagina. We bevestigen je plek en sturen alle praktische info door.</p>
-    <a class="pbtn pbtn--neon" href="contact.html" style="font-size:1.3rem;">Schrijf je team in →</a>
+    <p style="max-width:42ch;margin:22px auto 28px;font-size:18px;line-height:1.55;">Plaatsen zijn beperkt. Schrijf je team nu in — we bevestigen je plek en sturen alle praktische info door.</p>
+    <button class="pbtn pbtn--neon open-modal" style="font-size:1.3rem;">Team inschrijven →</button>
   </div>
 </section>
 
@@ -121,7 +353,7 @@
     <div class="foot-top">
       <div class="foot-brand">
         <img src="https://helgtre.com/wp-content/uploads/2026/06/logo-helgtre-white.png" alt="helgtre">
-        <p>Ultimate frisbee club uit Houthalen-Helchteren. Open divisie. Twee trainingen per week. Disc don't lie.</p>
+        <p>Ultimate frisbee club uit Houthalen-Helchteren. Open divisie. Twee trainingen per week. Schijve knalle.</p>
       </div>
       <div class="foot-cols">
         <div class="foot-col">
@@ -154,5 +386,49 @@
 </footer>
 
 <script src="site.js"></script>
+<script>
+(function(){
+  var modal   = document.getElementById('tg-modal');
+  var backdrop= document.getElementById('tg-backdrop');
+  var closeBtn= document.getElementById('tg-close');
+  var form    = document.getElementById('tg-form');
+  var wrap    = document.getElementById('tg-form-wrap');
+
+  function open(){
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.querySelectorAll('.open-modal').forEach(function(b){
+    b.addEventListener('click', open);
+  });
+  backdrop.addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') close(); });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var required = form.querySelectorAll('[required]');
+    var ok = true;
+    required.forEach(function(f){
+      f.style.borderColor = '';
+      if(!f.value.trim()){ f.style.borderColor='#e74c3c'; ok=false; }
+    });
+    if(!ok) return;
+    var name = (form.querySelector('[name=voornaam]')||{}).value || 'team';
+    var team = (form.querySelector('[name=teamnaam]')||{}).value || '';
+    wrap.innerHTML =
+      '<div class="tg-sent grain">' +
+      '<h3>Schijve knalle! 🥏</h3>' +
+      '<p>We hebben de inschrijving van <b>' + team.replace(/[<>]/g,'') + '</b> goed ontvangen, ' + name.replace(/[<>]/g,'') + '.<br><br>' +
+      'We nemen zo snel mogelijk contact op om jullie plek te bevestigen. Tot op het veld!</p>' +
+      '</div>';
+  });
+})();
+</script>
 </body>
 </html>

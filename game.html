@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schijve Knalle — De Game · Helgtre</title>
+<link rel="stylesheet" href="punk.css">
+<link rel="stylesheet" href="site.css">
+<style>
+  body { cursor: crosshair; background: var(--ink); }
+  .game-wrap { max-width: 860px; margin: 0 auto; padding: 0 20px 60px; }
+  .game-title { text-align: center; padding: 40px 0 24px; }
+  .game-title .word { justify-content: center; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .game-subtitle { font-family: 'Special Elite', monospace; color: #fff; text-align: center;
+    font-size: 15px; letter-spacing: .1em; margin-bottom: 22px; opacity: .7; }
+
+  #gameCanvas {
+    display: block; width: 100%; border: 4px solid #fff;
+    box-shadow: 8px 8px 0 var(--neon); cursor: crosshair;
+    image-rendering: pixelated;
+  }
+
+  .hud {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--ink); border: 3px solid var(--neon); border-top: none;
+    padding: 12px 20px; font-family: 'Anton', Impact, sans-serif;
+    text-transform: uppercase; font-size: 22px; color: #fff;
+  }
+  .hud .score { color: var(--neon-hot); }
+  .hud .throws { color: #fff; }
+  .hud .tip { font-family: 'Special Elite', monospace; font-size: 12px;
+    text-transform: none; color: #aaa; letter-spacing: .05em; }
+
+  #overlay {
+    position: absolute; inset: 0; background: rgba(0,0,30,0.88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; z-index: 10;
+  }
+  #overlay h2 { font-family: 'Anton', Impact, sans-serif; text-transform: uppercase;
+    font-size: clamp(28px, 5vw, 52px); color: var(--neon-hot); text-align: center; line-height: 1; }
+  #overlay p { font-family: 'Special Elite', monospace; color: #ccc; font-size: 15px;
+    text-align: center; max-width: 34ch; line-height: 1.6; }
+  #overlay .pbtn { font-size: 1.1rem; }
+  .canvas-wrap { position: relative; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="site-nav grain">
+  <div class="wrap row">
+    <a class="brand" href="index.html"><img src="https://helgtre.com/wp-content/uploads/2026/06/logo-helgtre-white.png" alt="helgtre"></a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="tournee-generale.html">Tournée Générale</a>
+      <a href="galerij.html">Galerij</a>
+      <a href="game.html" class="on">🥏 Game</a>
+      <a href="contact.html">Contact</a>
+      <a href="contact.html" class="nav-cta">Kom meedoen →</a>
+    </nav>
+    <button class="burger" aria-label="menu">Menu ≡</button>
+  </div>
+</header>
+
+<div class="game-wrap">
+  <div class="game-title">
+    <div class="word ransom">
+      <span class="rn rn--neon r1">S</span><span class="rn rn--paper r2">C</span><span class="rn rn--violet r3">H</span><span class="rn rn--ink r1">I</span><span class="rn rn--neon r2">J</span><span class="rn rn--violet r3">V</span><span class="rn rn--paper r1">E</span>
+      <span style="width:.3em"></span>
+      <span class="rn rn--ink r2">K</span><span class="rn rn--neon r3">N</span><span class="rn rn--violet r1">A</span><span class="rn rn--paper r2">L</span><span class="rn rn--neon r3">L</span><span class="rn rn--ink r1">E</span>
+    </div>
+    <p class="game-subtitle">— DE GAME —</p>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="gameCanvas" width="860" height="440"></canvas>
+    <div id="overlay">
+      <h2>Schijve Knalle</h2>
+      <p>Gooi de frisbee naar de hond op het strand.<br>Klik &amp; sleep om te richten — laat los om te gooien!</p>
+      <button class="pbtn pbtn--neon" id="startBtn">Start de game →</button>
+    </div>
+  </div>
+  <div class="hud">
+    <span class="score">Score: <span id="scoreVal">0</span></span>
+    <span class="tip" id="tipText">Klik &amp; sleep om te gooien</span>
+    <span class="throws">Worpen: <span id="throwsVal">10</span></span>
+  </div>
+</div>
+
+<script src="site.js"></script>
+<script>
+(function(){
+  var canvas = document.getElementById('gameCanvas');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+
+  var overlay = document.getElementById('overlay');
+  var startBtn = document.getElementById('startBtn');
+  var scoreEl = document.getElementById('scoreVal');
+  var throwsEl = document.getElementById('throwsVal');
+  var tipEl = document.getElementById('tipText');
+
+  // -- Game state --
+  var score = 0, throwsLeft = 10;
+  var state = 'idle'; // idle | aiming | throwing | returning | gameover
+
+  // -- Frisbee --
+  var disc = { x:0, y:0, vx:0, vy:0, angle:0, spin:0, active:false };
+  var GRAVITY = 0.28;
+  var LIFT = 0.09;
+
+  // -- Dog --
+  var dog = { x:0, y:0, tx:0, speed:0, catching:false, caughtTimer:0, happy:false };
+  var DOG_Y; // set on resize
+
+  // -- Throw aiming --
+  var aim = { down:false, sx:0, sy:0, ex:0, ey:0 };
+
+  // -- Player --
+  var PLAYER_X = 90;
+  var PLAYER_Y;
+
+  // Colours
+  var C = {
+    sky1:'#87CEEB', sky2:'#4A90D9',
+    sea1:'#1A6BAD', sea2:'#0D4A80',
+    sand1:'#F4D16A', sand2:'#D4A840',
+    disc:'#eef2ff', discRim:'#2B55E0',
+    dog:'#8B5E3C', dogDark:'#5C3D1E',
+    player:'#1A3A9C',
+    neon:'#2B55E0'
+  };
+
+  var SEA_Y, SAND_Y;
+
+  function layout(){
+    SEA_Y  = H * 0.42;
+    SAND_Y = H * 0.60;
+    PLAYER_Y = SAND_Y - 30;
+    DOG_Y    = SAND_Y - 20;
+  }
+  layout();
+
+  function resetDisc(){
+    disc.x = PLAYER_X + 20;
+    disc.y = PLAYER_Y - 40;
+    disc.vx = 0; disc.vy = 0;
+    disc.angle = 0; disc.spin = 0;
+    disc.active = false;
+  }
+
+  function resetDog(){
+    dog.x = W * (0.55 + Math.random() * 0.3);
+    dog.y = DOG_Y;
+    dog.tx = dog.x;
+    dog.catching = false;
+    dog.caughtTimer = 0;
+    dog.happy = false;
+  }
+
+  function startGame(){
+    score = 0; throwsLeft = 10;
+    scoreEl.textContent = 0;
+    throwsEl.textContent = 10;
+    state = 'aiming';
+    resetDisc();
+    resetDog();
+    tipEl.textContent = 'Klik & sleep om te gooien';
+    overlay.style.display = 'none';
+    loop();
+  }
+
+  function throwDisc(){
+    var dx = aim.sx - aim.ex;
+    var dy = aim.sy - aim.ey;
+    var power = Math.min(Math.sqrt(dx*dx+dy*dy), 220);
+    if(power < 10) return;
+    disc.vx = dx * 0.19;
+    disc.vy = dy * 0.19 - 1;
+    disc.spin = disc.vx * 0.4;
+    disc.active = true;
+    state = 'throwing';
+    throwsLeft--;
+    throwsEl.textContent = throwsLeft;
+    tipEl.textContent = 'Vliegt ie!';
+    // Dog runs to predicted landing
+    var t = predictLanding();
+    dog.tx = t;
+  }
+
+  function predictLanding(){
+    var px = disc.x, py = disc.y, pvx = disc.vx, pvy = disc.vy;
+    for(var i=0;i<300;i++){
+      pvy += GRAVITY; pvy -= LIFT * pvx * 0.04;
+      pvx *= 0.99; px += pvx; py += pvy;
+      if(py >= DOG_Y) return px;
+    }
+    return px;
+  }
+
+  // -- Drawing --
+  function drawBG(){
+    // Sky gradient
+    var sg = ctx.createLinearGradient(0,0,0,SEA_Y);
+    sg.addColorStop(0, C.sky2);
+    sg.addColorStop(1, C.sky1);
+    ctx.fillStyle = sg;
+    ctx.fillRect(0,0,W,SEA_Y);
+
+    // Sun
+    ctx.fillStyle = 'rgba(255,230,80,0.9)';
+    ctx.beginPath(); ctx.arc(W*0.78, H*0.12, 32, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,240,130,0.35)';
+    ctx.beginPath(); ctx.arc(W*0.78, H*0.12, 46, 0, Math.PI*2); ctx.fill();
+
+    // Clouds
+    drawCloud(W*0.15, H*0.1, 70, 28);
+    drawCloud(W*0.45, H*0.07, 55, 22);
+    drawCloud(W*0.62, H*0.15, 40, 18);
+
+    // Sea
+    var seaG = ctx.createLinearGradient(0,SEA_Y,0,SAND_Y);
+    seaG.addColorStop(0, C.sea1);
+    seaG.addColorStop(1, C.sea2);
+    ctx.fillStyle = seaG;
+    ctx.fillRect(0, SEA_Y, W, SAND_Y - SEA_Y);
+
+    // Waves
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    for(var w=0;w<3;w++){
+      var wy = SEA_Y + 14 + w*14;
+      ctx.beginPath();
+      for(var wx=0;wx<W;wx+=4){
+        var wh = Math.sin(wx*0.035 + w*1.2 + Date.now()*0.001) * 4;
+        if(wx===0) ctx.moveTo(wx, wy+wh); else ctx.lineTo(wx, wy+wh);
+      }
+      ctx.stroke();
+    }
+
+    // Sand
+    var sandG = ctx.createLinearGradient(0,SAND_Y,0,H);
+    sandG.addColorStop(0, C.sand1);
+    sandG.addColorStop(1, C.sand2);
+    ctx.fillStyle = sandG;
+    ctx.fillRect(0, SAND_Y, W, H - SAND_Y);
+
+    // Sand texture dots
+    ctx.fillStyle = 'rgba(180,130,40,0.2)';
+    for(var s=0;s<60;s++){
+      ctx.beginPath();
+      ctx.arc((s*137+11)%W, SAND_Y + ((s*97+5)%(H-SAND_Y)), 2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Beach ball
+    drawBeachBall(W*0.38, SAND_Y+18, 16);
+
+    // Palm tree
+    drawPalm(W*0.92, SAND_Y);
+  }
+
+  function drawCloud(cx, cy, rw, rh){
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx-rw*0.4, cy+rh*0.2, rw*0.6, rh*0.75, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+rw*0.4, cy+rh*0.15, rw*0.55, rh*0.7, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  function drawBeachBall(x,y,r){
+    ctx.save();
+    var seg = ['#e74c3c','#fff','#3498db','#fff','#2ecc71','#fff'];
+    for(var i=0;i<6;i++){
+      ctx.beginPath();
+      ctx.moveTo(x,y);
+      ctx.arc(x,y,r, (i/6)*Math.PI*2, ((i+1)/6)*Math.PI*2);
+      ctx.fillStyle = seg[i]; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPalm(x,y){
+    ctx.save();
+    // trunk
+    ctx.strokeStyle = '#5C3D1E'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.bezierCurveTo(x-10,y-50,x+5,y-100,x,y-140); ctx.stroke();
+    // leaves
+    var leafColor = '#2d7a2d';
+    ctx.fillStyle = leafColor; ctx.strokeStyle = '#1a4d1a'; ctx.lineWidth = 1.5;
+    var leafData = [[-60,-20,30,-60],[-30,-30,60,-50],[0,-20,70,-20],[20,-10,50,30],[0,0,-50,20],[-40,-10,-60,20]];
+    leafData.forEach(function(l){
+      ctx.beginPath();
+      ctx.moveTo(x,y-140);
+      ctx.quadraticCurveTo(x+l[0],y-140+l[1],x+l[2],y-140+l[3]);
+      ctx.lineWidth = 4; ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function drawPlayer(){
+    ctx.save();
+    ctx.translate(PLAYER_X, PLAYER_Y);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.ellipse(0,2,18,5,0,0,Math.PI*2); ctx.fill();
+    // body (jersey blue)
+    ctx.fillStyle = C.player;
+    ctx.fillRect(-12,-50,24,32);
+    // head
+    ctx.fillStyle = '#F0C89A';
+    ctx.beginPath(); ctx.arc(0,-58,12,0,Math.PI*2); ctx.fill();
+    // legs
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-10,-18,8,20); ctx.fillRect(3,-18,8,20);
+    // shoes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-13,2,10,5); ctx.fillRect(3,2,12,5);
+    // arm holding disc
+    if(state === 'aiming' && aim.down){
+      ctx.strokeStyle = '#F0C89A'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(12,-40); ctx.lineTo(22,-44); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDisc(){
+    ctx.save();
+    ctx.translate(disc.x, disc.y);
+    ctx.rotate(disc.angle);
+
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(3,6,28,6,0,0,Math.PI*2); ctx.fill();
+
+    // disc body (side view: ellipse)
+    var dg = ctx.createLinearGradient(-28,-8,28,8);
+    dg.addColorStop(0,'#dde6ff'); dg.addColorStop(0.5,'#fff'); dg.addColorStop(1,'#c8d0e0');
+    ctx.fillStyle = dg;
+    ctx.beginPath(); ctx.ellipse(0,0,28,8,0,0,Math.PI*2); ctx.fill();
+
+    // dome highlight
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-14,-5); ctx.quadraticCurveTo(0,-11,14,-5); ctx.stroke();
+
+    // blue accent ring
+    ctx.strokeStyle = C.discRim; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(0,0,14,4,0,0,Math.PI*2); ctx.stroke();
+
+    // rim
+    ctx.strokeStyle = '#b0bcd8'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0,0,28,8,0,0,Math.PI*2); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawDog(){
+    ctx.save();
+    ctx.translate(dog.x, dog.y);
+
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0,2,22,5,0,0,Math.PI*2); ctx.fill();
+
+    var t = Date.now();
+    var legSwing = dog.catching ? 0 : Math.sin(t*0.015)*10;
+    var tail = Math.sin(t*0.02)*20 + (dog.happy?15:0);
+
+    ctx.fillStyle = C.dog;
+
+    // body
+    ctx.beginPath(); ctx.ellipse(-2,-12,22,11,0,0,Math.PI*2); ctx.fill();
+
+    // head
+    ctx.beginPath(); ctx.arc(20,-18,13,0,Math.PI*2); ctx.fill();
+
+    // ear
+    ctx.fillStyle = C.dogDark;
+    ctx.beginPath(); ctx.ellipse(26,-26,5,8,-0.4,0,Math.PI*2); ctx.fill();
+
+    // snout
+    ctx.fillStyle = '#c08060';
+    ctx.beginPath(); ctx.ellipse(30,-16,7,5,0.2,0,Math.PI*2); ctx.fill();
+
+    // nose
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(33,-15,2.5,0,Math.PI*2); ctx.fill();
+
+    // eye
+    ctx.fillStyle = dog.happy?'#FFD700':'#222';
+    ctx.beginPath(); ctx.arc(24,-20,3,0,Math.PI*2); ctx.fill();
+
+    // tail
+    ctx.strokeStyle = C.dog; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-22,-14);
+    var tailRad = (tail * Math.PI)/180;
+    ctx.quadraticCurveTo(-36,-22+Math.sin(tailRad)*10,-34,-30+Math.cos(tailRad)*8);
+    ctx.stroke();
+
+    // legs
+    ctx.strokeStyle = C.dogDark; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(-10,-2); ctx.lineTo(-12+legSwing,14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4,-2); ctx.lineTo(6-legSwing,14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-15,-3); ctx.lineTo(-18+legSwing*0.5,14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(10,-3); ctx.lineTo(12-legSwing*0.5,14); ctx.stroke();
+
+    // caught disc above head
+    if(dog.catching){
+      ctx.save();
+      ctx.translate(22,-34);
+      ctx.rotate(Math.sin(t*0.01)*0.2);
+      var dg2 = ctx.createLinearGradient(-18,-5,18,5);
+      dg2.addColorStop(0,'#dde6ff'); dg2.addColorStop(0.5,'#fff'); dg2.addColorStop(1,'#c8d0e0');
+      ctx.fillStyle = dg2;
+      ctx.beginPath(); ctx.ellipse(0,0,18,5,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle = C.discRim; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.ellipse(0,0,9,2.5,0,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  function drawAimGuide(){
+    if(!aim.down) return;
+    var dx = aim.sx - aim.ex, dy = aim.sy - aim.ey;
+    var power = Math.min(Math.sqrt(dx*dx+dy*dy), 220);
+    if(power < 5) return;
+
+    // trajectory dots
+    var px = disc.x, py = disc.y;
+    var pvx = dx*0.19, pvy = dy*0.19-1;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for(var i=0;i<14;i++){
+      pvy += GRAVITY; pvy -= LIFT*pvx*0.04; pvx*=0.99;
+      px+=pvx*2; py+=pvy*2;
+      if(py>H) break;
+      var r = Math.max(1, 5 - i*0.3);
+      ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1 - i*0.06;
+    }
+    ctx.globalAlpha = 1;
+
+    // power bar
+    var barW = Math.min(power/220*120, 120);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(PLAYER_X-30, PLAYER_Y+20, 120, 10);
+    var barColor = power<80?'#2B55E0':power<160?'#FFD700':'#e74c3c';
+    ctx.fillStyle = barColor;
+    ctx.fillRect(PLAYER_X-30, PLAYER_Y+20, barW, 10);
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+    ctx.strokeRect(PLAYER_X-30, PLAYER_Y+20, 120, 10);
+  }
+
+  function drawScore(){
+    if(state==='gameover') return;
+    // score badge top-right
+    ctx.fillStyle = 'rgba(0,0,20,0.65)';
+    ctx.fillRect(W-140, 14, 126, 38);
+    ctx.strokeStyle = C.neon; ctx.lineWidth = 2;
+    ctx.strokeRect(W-140, 14, 126, 38);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Anton, Impact, sans-serif';
+    ctx.letterSpacing = '1px';
+    ctx.fillText('SCORE: '+score, W-128, 38);
+  }
+
+  function drawCatch(txt){
+    ctx.save();
+    ctx.font = 'bold 38px Anton, Impact, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = C.neon;
+    ctx.shadowColor = C.neon; ctx.shadowBlur = 20;
+    ctx.fillText(txt, W/2, H/2 - 10);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // -- Game loop --
+  var catchFeedback = {txt:'', timer:0};
+
+  function loop(){
+    if(state==='idle'||state==='gameover') return;
+
+    ctx.clearRect(0,0,W,H);
+    drawBG();
+
+    // Dog movement
+    if(state==='throwing'){
+      var dogDx = dog.tx - dog.x;
+      if(Math.abs(dogDx) > 2) dog.x += dogDx > 0 ? dog.speed : -dog.speed;
+    }
+
+    // Disc physics
+    if(disc.active){
+      disc.vy += GRAVITY;
+      disc.vy -= LIFT * Math.abs(disc.vx) * 0.04;
+      disc.vx *= 0.992;
+      disc.x += disc.vx;
+      disc.y += disc.vy;
+      disc.angle += disc.vx * 0.03;
+
+      // Catch detection
+      var catchDist = Math.sqrt(Math.pow(disc.x-dog.x-18,2)+Math.pow(disc.y-dog.y-18,2));
+      if(catchDist < 45 && !dog.catching){
+        dog.catching = true;
+        dog.happy = true;
+        disc.active = false;
+        score++;
+        scoreEl.textContent = score;
+        catchFeedback.txt = ['SCHIJVE KNALLE!','CAUGHT IT!','PAKKUH!','LEKKER!','WOOF!'][Math.floor(Math.random()*5)];
+        catchFeedback.timer = 70;
+        tipEl.textContent = '🐕 Gevangen! Nog '+throwsLeft+' worpen';
+        dog.caughtTimer = 80;
+      }
+
+      // Disc hits ground
+      if(disc.y > DOG_Y + 10){
+        disc.active = false;
+        if(!dog.catching){
+          catchFeedback.txt = ['Mis!','Bijna!','Oei...','Nope!'][Math.floor(Math.random()*4)];
+          catchFeedback.timer = 60;
+          tipEl.textContent = throwsLeft > 0 ? 'Mis! Nog '+throwsLeft+' worpen' : '';
+        }
+      }
+
+      // Disc out of bounds
+      if(disc.x > W+50 || disc.x < -50){
+        disc.active = false;
+        catchFeedback.txt = 'Buiten!';
+        catchFeedback.timer = 60;
+      }
+    }
+
+    // Dog uncatch / next throw
+    if(dog.caughtTimer > 0){
+      dog.caughtTimer--;
+      if(dog.caughtTimer === 0){
+        dog.catching = false;
+        dog.happy = false;
+        nextRound();
+      }
+    }
+
+    // Auto next after miss
+    if(!disc.active && !dog.catching && state==='throwing'){
+      setTimeout(function(){ nextRound(); }, 900);
+      state = 'waiting';
+    }
+
+    drawAimGuide();
+    drawDog();
+    drawDisc();
+    drawPlayer();
+    drawScore();
+
+    if(catchFeedback.timer > 0){
+      drawCatch(catchFeedback.txt);
+      catchFeedback.timer--;
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  function nextRound(){
+    if(throwsLeft <= 0){
+      endGame(); return;
+    }
+    resetDisc();
+    resetDog();
+    state = 'aiming';
+    tipEl.textContent = 'Klik & sleep om te gooien';
+  }
+
+  function endGame(){
+    state = 'gameover';
+    var msg = score>=8?'ABSOLUUT WAANZINNIG 🔥':score>=5?'Goei worp! 🥏':score>=3?'Kan beter... 🐕':'Oefenen maar! 😅';
+    overlay.innerHTML =
+      '<h2>Game over!</h2>'+
+      '<p style="font-size:28px;font-family:Anton,Impact;text-transform:uppercase;color:var(--neon-hot);">'+score+' / 10 catches</p>'+
+      '<p>'+msg+'</p>'+
+      '<button class="pbtn pbtn--neon" id="restartBtn">Nog een keer →</button>'+
+      '<a href="contact.html" class="pbtn pbtn--ink" style="margin-top:4px;">Kom echt meedoen →</a>';
+    overlay.style.display = 'flex';
+    document.getElementById('restartBtn').onclick = function(){ startGame(); };
+  }
+
+  // -- Input --
+  function getPos(e){
+    var r = canvas.getBoundingClientRect();
+    var scaleX = W / r.width;
+    var scaleY = H / r.height;
+    var cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+    var cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+    return { x: cx*scaleX, y: cy*scaleY };
+  }
+
+  canvas.addEventListener('mousedown', function(e){
+    if(state!=='aiming') return;
+    var p = getPos(e);
+    aim.down = true; aim.sx = p.x; aim.sy = p.y; aim.ex = p.x; aim.ey = p.y;
+  });
+  canvas.addEventListener('mousemove', function(e){
+    if(!aim.down) return;
+    var p = getPos(e);
+    aim.ex = p.x; aim.ey = p.y;
+  });
+  canvas.addEventListener('mouseup', function(e){
+    if(!aim.down||state!=='aiming') return;
+    aim.down = false;
+    throwDisc();
+  });
+  canvas.addEventListener('touchstart', function(e){ e.preventDefault();
+    if(state!=='aiming') return;
+    var p=getPos(e); aim.down=true; aim.sx=p.x; aim.sy=p.y; aim.ex=p.x; aim.ey=p.y;
+  },{passive:false});
+  canvas.addEventListener('touchmove', function(e){ e.preventDefault();
+    if(!aim.down)return; var p=getPos(e); aim.ex=p.x; aim.ey=p.y;
+  },{passive:false});
+  canvas.addEventListener('touchend', function(e){ e.preventDefault();
+    if(!aim.down||state!=='aiming')return; aim.down=false; throwDisc();
+  },{passive:false});
+
+  startBtn.onclick = function(){ startGame(); };
+
+  // Reset dog speed based on throws left (gets harder)
+  var origResetDog = resetDog;
+  resetDog = function(){
+    origResetDog();
+    dog.speed = 3.5 + (10-throwsLeft)*0.25;
+  };
+
+  // Draw idle frame
+  layout();
+  resetDisc();
+  resetDog();
+  ctx.clearRect(0,0,W,H);
+  drawBG();
+  drawDog();
+  drawDisc();
+  drawPlayer();
+
+})();
+</script>
+</body>
+</html>

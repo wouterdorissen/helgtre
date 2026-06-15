@@ -8,14 +8,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Saira+Stencil+One&family=Special+Elite&family=Archivo+Black&display=swap');
 
 :root{
-  --ink:#080014;            /* licorice */
-  --ink-2:#0d0320;
+  --ink:#000D1A;            /* deep navy-black */
+  --ink-2:#00091A;
   --paper:#ffffff;
-  --violet:#8436FF;         /* brand */
-  --neon:#a855ff;           /* pushed hotter */
-  --neon-hot:#c77dff;       /* glow highlight */
-  --neon-edge:#d8a8ff;
-  --paper-dim:#efeaf6;
+  --violet:#1A3A9C;         /* navy brand */
+  --neon:#2B55E0;           /* royal blue */
+  --neon-hot:#5B87FF;       /* bright blue highlight */
+  --neon-edge:#9BB8FF;
+  --paper-dim:#EAF0FF;
 }
 
 /* ---------- font stacks (clashing on purpose) ---------- */
@@ -58,6 +58,9 @@
 /* black/white only (no violet) */
 .photo.bw .vi{display:none;}
 .photo.bw .ht{opacity:.7;}
+/* clean: natural photo, no filters */
+.photo.clean img{filter:none;}
+.photo.clean .ht,.photo.clean .vi{display:none;}
 
 /* ============================================================
    TAPE + TORN EDGES + STAPLES
